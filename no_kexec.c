@@ -30,6 +30,7 @@
 #error "libbootimg version 0.2.0 or higher is required. Please update libbootimg."
 #endif
 
+#include "lib/dtb.h"
 #include "lib/fstab.h"
 #include "lib/inject.h"
 #include "lib/log.h"
@@ -306,12 +307,71 @@ int nokexec_is_second_boot(void)
     return is_second_boot;
 }
 
+static int nokexec_rm_dtb_mounts(const char *path_bootimg,
+        const char *path_bootimg_mod, struct multirom_status *status)
+{
+    int res = 0;
+    struct bootimg img;
+    const char *path_dtb_img ="/dtb.img";
 
-int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom)
+    res = libbootimg_init_load(&img, path_bootimg, LIBBOOTIMG_LOAD_ALL);
+    if (res != 0)
+    {
+        INFO("%s: Could not load bootimage.\n", __func__);
+        return res;
+    }
+
+    res = libbootimg_dump_dtb(&img, path_dtb_img);
+    if (res != 0)
+    {
+        INFO("%s: Could not dump dtb.\n", __func__);
+        return res;
+    }
+
+    res = remove_dtb_mounts(path_dtb_img, status);
+    if (res < 0)
+    {
+        INFO("%s: Could not dump bootimage.\n", __func__);
+        return res;
+    }
+    else if (status->dtb_removed_partitions == DTB_PARTITION_NONE)
+    {
+        return 0;
+    }
+
+    if (status->dtb_removed_partitions != DTB_PARTITION_NONE)
+    {
+        res = libbootimg_load_dtb(&img, path_dtb_img);
+        if (res != 0)
+        {
+            INFO("%s: Could not dump bootimage.\n", __func__);
+            return res;
+        }
+
+        res = libbootimg_write_img(&img, path_bootimg_mod);
+        if (res <= 0)
+        {
+            INFO("%s: Could not write bootimage. Error: %s.\n", __func__,
+                    libbootimg_error_str(res));
+            return res;
+        }
+    }
+
+    // We only arrive here, if these two files exist.
+    unlink(path_dtb_img);
+    return 0;
+}
+
+int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom,
+        struct multirom_status *status)
 {
     // make sure all the paths are set up, otherwise abort
     if (!nokexec_s.path_boot_mmcblk || !nokexec_s.path_primary_bootimg)
         return -1;
+
+    int res = 0;
+    const char *path_bootimg_mod = "/boot.img";
+    char path[256];
 
     if (nokexec_is_new_primary())
         if (nokexec_backup_primary())
@@ -320,12 +380,34 @@ int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom)
     // now flash the secondary boot.img to primary slot
     char path_bootimg[256];
     sprintf(path_bootimg, "%s/%s", secondary_rom->base_path, "boot.img");
-    if (nokexec_flash_to_primary(path_bootimg))
+
+    res = nokexec_rm_dtb_mounts(path_bootimg, path_bootimg_mod, status);
+    if (res != 0)
+    {
+        return res;
+    }
+
+    if (status->dtb_removed_partitions != (1 << DTB_PARTITION_NONE))
+    {
+        sprintf(path_bootimg, "%s", path_bootimg_mod);
+    }
+    else if (status->dtb_removed_partitions == 0)
+    {
+        INFO("Information about partitions removed from DTB is incorrect.\n");
         return -3;
+    }
+
+    if (nokexec_flash_to_primary(path_bootimg))
+        return -4;
 
     // make note that the primary slot now contains a secondary boot.img
     if (nokexec_set_secondary_flag())
-        return -4;
+        return -5;
+
+    if (status->dtb_removed_partitions != (1 << DTB_PARTITION_NONE))
+    {
+        unlink(path_bootimg_mod);
+    }
 
     return 0;
 }

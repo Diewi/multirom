@@ -5,6 +5,7 @@ common_SRC_FILES := \
     button.c \
     colors.c \
     containers.c \
+    dtb.c \
     framebuffer.c \
     framebuffer_generic.c \
     framebuffer_png.c \
@@ -26,7 +27,6 @@ common_C_INCLUDES := $(multirom_local_path)/lib \
     external/libpng \
     external/zlib \
     external/freetype/include \
-    system/extras/libbootimg/include \
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending
 # is quick enough to be done in an animation
@@ -61,6 +61,7 @@ LOCAL_MODULE := libmultirom_static
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
+LOCAL_STATIC_LIBRARIES := libfdt
 LOCAL_CFLAGS += $(common_C_FLAGS)
 LOCAL_C_INCLUDES += $(common_C_INCLUDES)
 LOCAL_SRC_FILES := $(common_SRC_FILES)

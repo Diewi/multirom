@@ -42,6 +42,7 @@
 #endif
 
 #include "lib/containers.h"
+#include "lib/dtb.h"
 #include "lib/framebuffer.h"
 #include "lib/inject.h"
 #include "lib/input.h"
@@ -283,7 +284,7 @@ int multirom(const char *rom_to_boot)
     {
         ERROR(NO_KEXEC_LOG_TEXT ": Something went wrong in mounting the needed partition, so falling back...");
         nokexec()->selected_method = NO_KEXEC_BOOT_NORMAL;
-        s.is_second_boot = 0; 
+        s.is_second_boot = 0;
         //ERROR(NO_KEXEC_LOG_TEXT ":    to Internal\n");     s.auto_boot_type = AUTOBOOT_FORCE_CURRENT;                // force reboot to Internal (this would be mrom default behaviour)
         //ERROR(NO_KEXEC_LOG_TEXT ":    to MultiROM GUI\n"); s.auto_boot_type = AUTOBOOT_NAME;                         // bring up the gui instead
         ERROR(NO_KEXEC_LOG_TEXT ":    to Recovery\n"); exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);  goto finish;      // reboot to recovery
@@ -376,7 +377,7 @@ int multirom(const char *rom_to_boot)
                 // Flash secondary boot.img, and reboot
                 // note: a secondary boot.img in primary slot will trigger second_boot=1
                 //       so we don't need to worry about that any more
-                if (nokexec_flash_secondary_bootimg(to_boot) < 0)
+                if (nokexec_flash_secondary_bootimg(to_boot, &s) < 0)
                     MR_NO_KEXEC_ABORT;
 
                 s.current_rom = to_boot;
@@ -775,6 +776,10 @@ int multirom_load_status(struct multirom_status *s)
             s->force_generic_fb = atoi(arg);
         else if(strstr(name, "anim_duration_coef_pct"))
             s->anim_duration_coef = ((float)atoi(arg)) / 100;
+        else if (strstr(name, "dtb_removed_partitions"))
+        {
+            s->dtb_removed_partitions = atoi(arg);
+        }
     }
 
     fclose(f);
@@ -941,6 +946,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "rotation=%d\n", s->rotation);
     fprintf(f, "force_generic_fb=%d\n", s->force_generic_fb);
     fprintf(f, "anim_duration_coef_pct=%d\n", (int)(s->anim_duration_coef*100));
+    fprintf(f, "dtb_removed_partitions=%d\n", s->dtb_removed_partitions);
 
     fclose(f);
     return 0;
@@ -1655,11 +1661,19 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw,
     if(!tab)
         goto exit;
 
-    int disable_sys = fstab_disable_parts(tab, "/system");
+    int disable_sys = -1;
+    if (s->dtb_removed_partitions == (1 << DTB_PARTITION_SYSTEM))
+    {
+        disable_sys = 1;
+    }
+    else
+    {
+        disable_sys = fstab_disable_parts(tab, "/system");
+    }
     int disable_data = fstab_disable_parts(tab, "/data");
     int disable_cache = fstab_disable_parts(tab, "/cache");
 
-    if(disable_sys < 0 || disable_data < 0 || disable_cache < 0)
+    if (disable_sys < 0 || disable_data < 0 || disable_cache < 0)
     {
 #if MR_DEVICE_HOOKS >= 4
         if(!mrom_hook_allow_incomplete_fstab())
@@ -2261,11 +2275,17 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
     kexec_add_arg(kexec, "--initrd=/initrd.img");
 
 #ifdef MR_KEXEC_DTB
-    if(libbootimg_dump_dtb(&img, "/dtb.img") >= 0) {
+    if (libbootimg_dump_dtb(&img, "/dtb.img") >= 0) {
         printf("DTB: dtb image found!");
+        res = remove_dtb_mounts("/dtb.img", s);
+        if (res < 0)
+        {
+            return -1;
+        }
         kexec_add_arg(kexec, "--dtb=/dtb.img");
     }
-    else {
+    else
+    {
         printf("DTB: no dtb image found!");
 #ifdef MR_NOT_64BIT
         kexec_add_arg(kexec, "--dtb");

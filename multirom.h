@@ -123,6 +123,7 @@ struct multirom_status
     struct usb_partition **partitions;
     char *curr_rom_part;
     struct fstab *fstab;
+    int dtb_removed_partitions;
     struct rcadditions rc;
 
     // Runtime variables

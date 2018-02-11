@@ -79,7 +79,8 @@ int nokexec_set_struct(struct multirom_status *s);
 void nokexec_free_struct(void);
 
 int nokexec_restore_primary_and_cleanup(void);
-int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom);
+int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom,
+        struct multirom_status *status);
 
 int nokexec_is_second_boot(void);
 

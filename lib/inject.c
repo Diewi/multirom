@@ -50,6 +50,65 @@ static int get_img_trampoline_ver(struct bootimg *img)
     return ver;
 }
 
+/*static int remove_dtb_mounts(const char *dtb_name)
+{
+    int res = 0;
+    int fdt_fstab_node_offset = 0;
+    int fdt_fstab_system_offset = 0;
+
+    char *dtb_buf = utilfdt_read(dtb_name);
+    if(dtb_buf == NULL)
+    {
+        ERROR("Could not read provided DTB.\n");
+        return -1;
+    }
+
+    fdt_fstab_node_offset = fdt_node_offset_by_compatible(dtb_buf, 0,
+            "android,fstab");
+    if(fdt_fstab_node_offset == FDT_ERR_NOTFOUND)
+    {
+        INFO("No fstab entry found in DTB. No modifications needed.\n");
+        return 0;
+    }
+    else if(fdt_fstab_node_offset < 0)
+    {
+        ERROR("Error getting fstab node from DTB. Errno: %d", fdt_fstab_node_offset);
+        return fdt_fstab_node_offset;
+    }
+    INFO("DTB fstab node found at offset %x.\n", fdt_fstab_node_offset);
+
+    fdt_fstab_system_offset = fdt_subnode_offset(dtb_buf, fdt_fstab_node_offset,
+            "system");
+    if(fdt_fstab_system_offset == FDT_ERR_NOTFOUND)
+    {
+        INFO("No system partition entry found in DTB, despite an fstab entry was \
+                found. No modifications needed.\n");
+        return 0;
+    }
+    else if(fdt_fstab_system_offset < 0)
+    {
+        ERROR("Error getting system partition from DTB. Errno: %d", fdt_fstab_node_offset);
+        return fdt_fstab_node_offset;
+    }
+    INFO("DTB system partition found at offset %x.\n", fdt_fstab_system_offset);
+
+    res = fdt_del_node(dtb_buf, fdt_fstab_system_offset);
+    if(res != 0)
+    {
+        ERROR("Failed to delete system partition entry from DTB. Errno: %d.\n", res);
+        return res;
+    }
+
+    res = utilfdt_write_err(dtb_name, dtb_buf);
+    if(res != 0)
+    {
+        ERROR("Could not write DTB image to %s. Errno: %d.\n", dtb_name, res);
+        return res;
+    }
+
+    return 1;
+}*/
+
 static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_path)
 {
     char buf[256];
@@ -275,6 +334,7 @@ int inject_bootimg(const char *img_path, int force)
     struct bootimg img;
     int img_ver;
     char initrd_path[256];
+    static const char *dtb_name = "/dtb.img";
     static const char *initrd_tmp_name = "/inject-initrd.img";
     static const char *initrd2_tmp_name = "/mrom_rd/sbin/ramdisk.cpio";
 
